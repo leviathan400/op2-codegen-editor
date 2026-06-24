@@ -18,7 +18,16 @@ class EditorWindow(QMainWindow):
         self.setWindowTitle("OP2 Mission Editor (Prototyp)")
         self.resize(1250, 870)
 
-        self.vol = VolFile(MAPS_VOL)
+        try:
+            self.res = FolderResources(OP2_DIR)
+            if not self.res.names():
+                raise FileNotFoundError(f"keine .map-Dateien unter {self.res.root}")
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Outpost 2 nicht gefunden",
+                f"Karten konnten nicht geladen werden:\n{e}\n\n"
+                f"Bitte 'game_path' in der config.ini anpassen:\n{appconfig.CONFIG_PATH}")
+            raise SystemExit(1)
         self.map = None
         self.map_name = "cm02.map"
         self.mission_name = "Editor Mission"
@@ -36,9 +45,8 @@ class EditorWindow(QMainWindow):
         self._pending_trigger_index = 0
         self._pending_action_index = -1
 
-        cfg = self._load_config()
-        self.output_dir = cfg.get("output_dir", DEFAULT_OUTPUT_DIR)
-        self.dll_name = cfg.get("dll_name", DEFAULT_DLL_NAME)
+        self.output_dir = DEFAULT_OUTPUT_DIR
+        self.dll_name = DEFAULT_DLL_NAME
         self._placement_active = False
         self._placement_preview_items = []
 
@@ -70,20 +78,6 @@ class EditorWindow(QMainWindow):
         self.statusBar().showMessage("Bereit.")
         self.load_map(self.map_name)
         self._refresh_overview()
-
-    def _load_config(self) -> dict:
-        try:
-            return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            return {}
-
-    def _save_config(self) -> None:
-        try:
-            CONFIG_PATH.write_text(json.dumps(
-                {"output_dir": self.output_dir, "dll_name": self.dll_name}, indent=2),
-                encoding="utf-8")
-        except Exception:
-            pass
 
     def _build_menu(self):
         m = self.menuBar().addMenu("&Datei")
@@ -365,7 +359,7 @@ class EditorWindow(QMainWindow):
 
     # --- Karte ---
     def choose_map(self):
-        dlg = MapDialog(self, self.vol.names(), self.map_name, self.mission_name)
+        dlg = MapDialog(self, self.res.names(), self.map_name, self.mission_name)
         if dlg.exec() == QDialog.Accepted:
             self.mission_name = dlg.name_edit.text().strip() or "Editor Mission"
             self.load_map(dlg.combo.currentText())
@@ -808,7 +802,7 @@ class EditorWindow(QMainWindow):
                 name += ".dll"
             self.output_dir = dlg.dir_edit.text().strip() or DEFAULT_OUTPUT_DIR
             self.dll_name = name
-            self._save_config()
+            appconfig.set_output(self.output_dir, self.dll_name)
             self.statusBar().showMessage(f"Ausgabeort: {Path(self.output_dir) / self.dll_name}")
 
     def _missions_dir(self) -> Path:
@@ -928,8 +922,8 @@ class EditorWindow(QMainWindow):
 
     def load_map(self, name):
         try:
-            self.map = Op2Map(self.vol.read_file(name))
-            arr = np.ascontiguousarray(render_array(self.map, self.vol))
+            self.map = Op2Map(self.res.read_file(name))
+            arr = np.ascontiguousarray(render_array(self.map, self.res))
             qimg = QImage(arr.data, arr.shape[1], arr.shape[0], arr.shape[1] * 3, QImage.Format_RGB888)
             pix = QPixmap.fromImage(qimg.copy())
         except Exception as e:

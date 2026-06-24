@@ -31,10 +31,12 @@ from PySide6.QtGui import QFont, QPainterPath, QPolygonF, QCursor
 from PySide6.QtCore import QPointF
 
 from op2map import Op2Map
+from op2res import FolderResources, content_root
 from render import render_array
 from tileset import TILE
 from vol import VolFile
 
+import appconfig
 import build as build_mod
 from codegen import generate_levelmain
 from mission_model import (
@@ -44,14 +46,17 @@ from mission_model import (
 )
 from techs import load_techs
 
-OP2_DIR = Path(r"C:\Program Files (x86)\GOG Galaxy\Games\Outpost 2")
-MAPS_VOL = OP2_DIR / "maps.vol"
-CONFIG_PATH = EDITOR_DIR / "config.json"
+# Pfade kommen aus config.ini (neben der EXE bzw. im Projekt-Root).
+appconfig.ensure_default_file()
+OP2_DIR = appconfig.game_path()
+# OPU 1.4.1: Karten/Tilesets/Techs liegen entpackt unter <game>/OPU (kein .vol).
+CONTENT_ROOT = content_root(OP2_DIR)
+TECHS_DIR = CONTENT_ROOT / "base" / "techs"
 SCENE_TILE = TILE  # native 32px -> scharf
 
 # Standard-Ausgabeort der Mission-DLL. Colony-Missionen brauchen den Praefix "c".
-DEFAULT_OUTPUT_DIR = str(OP2_DIR)
-DEFAULT_DLL_NAME = "cEditorMission.dll"
+DEFAULT_OUTPUT_DIR = appconfig.output_dir()
+DEFAULT_DLL_NAME = appconfig.dll_name()
 
 # Gebaeude (Anzeige, map_id, Footprint aus building.txt)
 STRUCTURES = [

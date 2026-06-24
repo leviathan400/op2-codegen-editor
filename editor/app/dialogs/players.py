@@ -11,7 +11,7 @@ class PlayersDialog(QDialog):
         self.players = [PlayerSpec(**asdict(p)) for p in players] or [PlayerSpec()]
         self._idx = 0
         self._loading = False
-        self.all_techs = load_techs(OP2_DIR / "multitek.txt")  # (id, name), sortiert
+        self.all_techs = load_techs(TECHS_DIR / "multitek.txt")  # (id, name), sortiert
         self.tech_names = {tid: name for tid, name in self.all_techs}
 
         self.plist = QListWidget()
