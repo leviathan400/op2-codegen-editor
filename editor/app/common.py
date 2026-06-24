@@ -19,8 +19,12 @@ for _p in (ROOT / "codegen", ROOT / "mapview", EDITOR_DIR):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+# Fenster-/App-Icon (liegt im Paket unter resources/).
+# Window/app icon (lives in the package under resources/).
+ICON_PATH = HERE / "resources" / "Structure.ico"
+
 from PySide6.QtCore import Qt, QRectF, QThread, QTimer, Signal
-from PySide6.QtGui import QAction, QBrush, QColor, QImage, QPainter, QPen, QPixmap
+from PySide6.QtGui import QAction, QBrush, QColor, QIcon, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDockWidget,
     QFileDialog, QFormLayout, QGraphicsRectItem, QGraphicsScene,

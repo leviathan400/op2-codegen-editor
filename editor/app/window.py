@@ -16,6 +16,9 @@ class EditorWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(tr("window.app_title"))
+        # Fenster-Icon (Form-Icon).
+        # Window icon (form icon).
+        self.setWindowIcon(QIcon(str(ICON_PATH)))
         self.resize(1250, 870)
 
         try:
