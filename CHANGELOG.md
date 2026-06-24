@@ -2,13 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-This project does not yet use versioned releases; changes accumulate under
-**Unreleased** until the first tagged version.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+and the project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] - 2026-06-24
 
 ### Added
+- Standalone Windows executable built with PyInstaller (via the
+  `editor/run_app.py` launcher) — runs without a Python install; ships with the
+  `lang.*.ini` files next to the exe and the app icon baked in. (The in-editor
+  **Build → DLL** still needs the dev setup: `LevelTemplate` + Visual Studio.)
+- **View** menu with a tile-grid toggle (remembered in `config.ini [ui]
+  show_grid`) and zoom presets — Default (1:1, OP2 in-game scale) and Zoomed out
+  (fit map); the mouse wheel still free-zooms. (`editor/app/mapview.py`)
+- C++ syntax highlighting in the "Show code" preview, on a dark theme.
+  (`editor/app/cpp_highlight.py`)
+- Application and window icon (`Structure.ico`).
 - Multi-language UI (German/English) via INI string tables (`lang.de.ini`,
   `lang.en.ini`) and a small `tr()` lookup layer (`editor/app/i18n.py`). The
   language is set in `config.ini [ui] language`; `auto` detects the OS language
@@ -33,6 +42,7 @@ This project does not yet use versioned releases; changes accumulate under
   it points at `config.ini` instead of crashing.
 
 ### Changed
+- All Python source comments and docstrings are now bilingual (German + English).
 - Game and Visual Studio paths now come from `config.ini` instead of being
   hardcoded. (`editor/app/common.py`, `codegen/build.py`)
 - The editor reads maps, tilesets, and tech trees as loose files from the OPU
