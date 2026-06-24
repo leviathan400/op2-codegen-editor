@@ -1,0 +1,15 @@
+* text=auto
+
+*.sln text eol=crlf
+*.vcxproj text eol=crlf
+*.filters text eol=crlf
+*.bat text eol=crlf
+
+*.png binary
+*.lib binary
+*.dll binary
+*.pdb binary
+*.obj binary
+*.iobj binary
+*.ipdb binary
+

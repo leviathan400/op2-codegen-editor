@@ -1,0 +1,51 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Visual Studio / MSBuild
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.VC.db
+*.VC.opendb
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+bin/
+obj/
+*.obj
+*.iobj
+*.ipdb
+*.pdb
+*.ilk
+*.exp
+*.dll
+*.exe
+*.tlog
+*.lastbuildstate
+
+# Project-local generated artifacts
+editor/config.json
+
+# LevelTemplate: old submodule metadata (SDK sources are bundled directly)
+LevelTemplate/**/.gitmodules
+LevelTemplate/.git/
+LevelTemplate/.git-github-backup/
+
+# Backup / scratch files
+*.orig

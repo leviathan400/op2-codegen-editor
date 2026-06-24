@@ -1,0 +1,256 @@
+"""Interaktive Missions-Timeline / Node-Canvas (Node-RED-artig).
+
+Trigger und Gruppen sind Knoten; Aktionen, die etwas referenzieren, werden als
+gerichtete Verbindungen (Draehte) gezeichnet. Knoten sind verschiebbar,
+Doppelklick oeffnet den passenden Editor, im Verbinden-Modus zieht man neue
+Verbindungen (Trigger -> Trigger / Trigger -> Gruppe).
+"""
+from __future__ import annotations
+
+from .common import *
+
+NODE_W = 180
+NODE_H = 56
+COL_X_TRIGGERS = 20
+COL_X_GROUPS = 280
+Y_GAP = 92
+Y_START = 20
+
+NODE_COLORS = {
+    "trigger_start": QColor(70, 130, 200),
+    "trigger": QColor(95, 95, 125),
+    "mining": QColor(200, 150, 60),
+    "building": QColor(80, 160, 90),
+    "reinforce": QColor(165, 95, 165),
+}
+WIRE_COLORS = {
+    "createTrigger": QColor(120, 200, 255),
+    "assignToGroup": QColor(255, 210, 90),
+    "startMiningOperation": QColor(255, 170, 70),
+    "setTargCount": QColor(140, 230, 140),
+    "recordBuilding": QColor(200, 200, 200),
+    "recordTube": QColor(120, 220, 255),
+    "recordWall": QColor(255, 160, 100),
+}
+
+
+class NodeItem(QGraphicsRectItem):
+    def __init__(self, key, kind, index, title, subtitle, timeline, color_key=None):
+        super().__init__(0, 0, NODE_W, NODE_H)
+        self.key = key
+        self.kind = kind            # "trigger" | "mining" | "building" | "reinforce"
+        self.index = index          # Trigger-Index (oder -1)
+        self.timeline = timeline
+        color = NODE_COLORS.get(color_key or kind, QColor(110, 110, 110))
+        self.setBrush(QBrush(color))
+        self.setPen(QPen(QColor(20, 20, 20), 1.5))
+        self.setFlag(QGraphicsItem.ItemIsMovable, True)
+        self.setFlag(QGraphicsItem.ItemIsSelectable, True)
+        self.setFlag(QGraphicsItem.ItemSendsGeometryChanges, True)
+        self.setZValue(10)
+        t = QGraphicsSimpleTextItem(title, self)
+        t.setBrush(QBrush(Qt.white)); t.setPos(8, 6)
+        s = QGraphicsSimpleTextItem(subtitle, self)
+        s.setBrush(QBrush(QColor(225, 225, 225))); s.setPos(8, 28)
+        # Eingangs-Port oben (alle Knoten koennen Ziel sein)
+        pin = QGraphicsEllipseItem(NODE_W / 2 - 6, -6, 12, 12, self)
+        pin.setBrush(QBrush(QColor(220, 220, 220))); pin.setPen(QPen(QColor(20, 20, 20), 1))
+        # Ausgangs-Port unten nur fuer Trigger
+        if kind == "trigger":
+            pout = QGraphicsEllipseItem(NODE_W / 2 - 6, NODE_H - 6, 12, 12, self)
+            pout.setBrush(QBrush(QColor(255, 255, 255))); pout.setPen(QPen(QColor(20, 20, 20), 1))
+
+    def output_pos(self):
+        return self.scenePos() + QPointF(NODE_W / 2, NODE_H)
+
+    def input_pos(self):
+        return self.scenePos() + QPointF(NODE_W / 2, 0)
+
+    def center(self):
+        return self.scenePos() + QPointF(NODE_W / 2, NODE_H / 2)
+
+    def itemChange(self, change, value):
+        if change == QGraphicsItem.ItemPositionHasChanged:
+            self.timeline._on_node_moved(self)
+        return super().itemChange(change, value)
+
+    def mousePressEvent(self, event):
+        if self.timeline.connect_mode:
+            self.timeline._connect_click(self)
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        self.timeline._edit_node(self)
+        event.accept()
+
+
+class WireItem(QGraphicsPathItem):
+    def __init__(self, src, dst, action_kind):
+        super().__init__()
+        self.src = src
+        self.dst = dst
+        color = WIRE_COLORS.get(action_kind, QColor(180, 180, 180))
+        self.setPen(QPen(color, 2.2))
+        self.setBrush(QBrush(color))
+        self.setZValue(4)
+        self.update_path()
+
+    def update_path(self):
+        p1 = self.src.output_pos()   # unten am Quellknoten
+        p2 = self.dst.input_pos()    # oben am Zielknoten
+        path = QPainterPath(p1)
+        dy = max(40.0, abs(p2.y() - p1.y()) * 0.5)
+        path.cubicTo(p1.x(), p1.y() + dy, p2.x(), p2.y() - dy, p2.x(), p2.y())
+        # Pfeilspitze nach unten ins Ziel
+        path.addPolygon(QPolygonF([
+            QPointF(p2.x(), p2.y()),
+            QPointF(p2.x() - 6, p2.y() - 12),
+            QPointF(p2.x() + 6, p2.y() - 12),
+        ]))
+        self.setPath(path)
+
+
+class TimelineView(QGraphicsView):
+    editTrigger = Signal(int)
+    editGroups = Signal()
+    addTrigger = Signal()
+    connectMade = Signal(str, str)   # (Quell-Trigger-Name, Ziel-Knoten-Key)
+    deleteTrigger = Signal(int)      # Trigger-Index
+
+    def __init__(self, positions: dict):
+        self._scene = QGraphicsScene()
+        super().__init__(self._scene)
+        self.setRenderHint(QPainter.Antialiasing, True)
+        self.setDragMode(QGraphicsView.ScrollHandDrag)
+        self.positions = positions          # key -> [x, y], wird persistiert
+        self.nodes: dict[str, NodeItem] = {}
+        self.wires: list[WireItem] = []
+        self.connect_mode = False
+        self.connect_src: NodeItem | None = None
+        self._suppress_save = False
+
+    # --- Aufbau ---
+    def rebuild(self, triggers, mining_groups, building_groups, reinforce_groups):
+        self._scene.clear()
+        self.nodes.clear()
+        self.wires.clear()
+        self.connect_src = None
+
+        name_to_key = {}
+        for g in mining_groups:
+            name_to_key[g.name] = f"mining:{g.name}"
+        for g in building_groups:
+            name_to_key[g.name] = f"building:{g.name}"
+        for g in reinforce_groups:
+            name_to_key[g.name] = f"reinforce:{g.name}"
+
+        self._suppress_save = True
+        # Trigger-Knoten: senkrechte Spalte links, nach Startzeit von oben nach unten
+        order = sorted(range(len(triggers)),
+                       key=lambda i: (not triggers[i].enabled_at_start, triggers[i].marks))
+        for row, ti in enumerate(order):
+            t = triggers[ti]
+            node_kind = "trigger_start" if t.enabled_at_start else "trigger"
+            cond = {v: k for k, (v, _) in TRIGGER_CONDITIONS.items()}.get(t.condition, t.condition)
+            sub = f"{cond} · {len(t.actions)} Aktion(en)"
+            node = NodeItem(f"trigger:{t.name}", "trigger", ti, t.name, sub, self, color_key=node_kind)
+            self._place(node, COL_X_TRIGGERS, Y_START + row * Y_GAP)
+            self.nodes[f"trigger:{t.name}"] = node
+            self._scene.addItem(node)
+
+        # Gruppen-Knoten: senkrechte Spalte rechts
+        row = 0
+        for gkind, groups in (("mining", mining_groups), ("building", building_groups),
+                              ("reinforce", reinforce_groups)):
+            for g in groups:
+                node = NodeItem(f"{gkind}:{g.name}", gkind, -1, g.name, gkind, self)
+                self._place(node, COL_X_GROUPS, Y_START + row * Y_GAP)
+                self.nodes[f"{gkind}:{g.name}"] = node
+                self._scene.addItem(node)
+                row += 1
+        self._suppress_save = False
+
+        # Verbindungen aus Aktionen
+        for ti, t in enumerate(triggers):
+            src = self.nodes.get(f"trigger:{t.name}")
+            if src is None:
+                continue
+            for a in t.actions:
+                dst_key = self._target_key(a, name_to_key)
+                if dst_key and dst_key in self.nodes:
+                    wire = WireItem(src, self.nodes[dst_key], a.kind)
+                    self._scene.addItem(wire)
+                    self.wires.append(wire)
+
+        rect = self._scene.itemsBoundingRect()
+        self._scene.setSceneRect(rect.adjusted(-80, -80, 80, 80))
+
+    def _target_key(self, action, name_to_key):
+        k = action.kind
+        if k == "createTrigger" and action.target:
+            return f"trigger:{action.target}"
+        if k == "startMiningOperation" and action.mining_group_name:
+            return name_to_key.get(action.mining_group_name)
+        if k in ("assignToGroup", "setTargCount", "recordBuilding", "recordTube", "recordWall"):
+            return name_to_key.get(action.group_name)
+        return None
+
+    def _place(self, node, default_x, default_y):
+        pos = self.positions.get(node.key)
+        if pos:
+            node.setPos(pos[0], pos[1])
+        else:
+            node.setPos(default_x, default_y)
+
+    def auto_layout(self):
+        self.positions.clear()
+        # Beim naechsten rebuild werden Standardpositionen verwendet.
+
+    # --- Callbacks von Knoten ---
+    def _on_node_moved(self, node):
+        if not self._suppress_save:
+            p = node.scenePos()
+            self.positions[node.key] = [p.x(), p.y()]
+        for w in self.wires:
+            w.update_path()
+
+    def _edit_node(self, node):
+        if node.kind == "trigger":
+            self.editTrigger.emit(node.index)
+        else:
+            self.editGroups.emit()
+
+    def _connect_click(self, node):
+        if self.connect_src is None:
+            if node.kind != "trigger":
+                return  # Verbindungen starten nur an Triggern
+            self.connect_src = node
+            node.setPen(QPen(QColor(255, 255, 0), 3))
+        else:
+            src_name = self.connect_src.key.split(":", 1)[1]
+            self.connect_src.setPen(QPen(QColor(20, 20, 20), 1.5))
+            self.connect_src = None
+            if node is not None and node.key != f"trigger:{src_name}":
+                self.connectMade.emit(src_name, node.key)
+
+    def set_connect_mode(self, on):
+        self.connect_mode = on
+        if self.connect_src is not None:
+            self.connect_src.setPen(QPen(QColor(20, 20, 20), 1.5))
+            self.connect_src = None
+        self.setDragMode(QGraphicsView.NoDrag if on else QGraphicsView.ScrollHandDrag)
+        self.setCursor(Qt.CrossCursor if on else Qt.ArrowCursor)
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+            for item in self._scene.selectedItems():
+                if isinstance(item, NodeItem) and item.kind == "trigger":
+                    self.deleteTrigger.emit(item.index)
+                    return
+        super().keyPressEvent(event)
+
+    def wheelEvent(self, event):
+        f = 1.2 if event.angleDelta().y() > 0 else 1 / 1.2
+        self.scale(f, f)
