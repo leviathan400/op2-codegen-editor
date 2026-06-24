@@ -11,6 +11,7 @@ Abschnitte:
   [output]  output_dir -> Zielordner der Mission-DLL (leer = game_path)
             dll_name   -> Dateiname der Mission-DLL
   [ui]      language   -> Sprache der Oberflaeche: auto (Systemsprache), de, en, ...
+            show_grid  -> Kachelgitter ueber der Karte (true/false)
 
 Central INI configuration of the editor (machine-specific paths).
 
@@ -25,6 +26,7 @@ Sections:
   [output]  output_dir -> target folder of the mission DLL (empty = game_path)
             dll_name   -> file name of the mission DLL
   [ui]      language   -> language of the UI: auto (system language), de, en, ...
+            show_grid  -> tile grid over the map (true/false)
 """
 from __future__ import annotations
 
@@ -136,6 +138,26 @@ def set_language(code: str) -> None:
     _save(cp)
 
 
+def show_grid() -> bool:
+    """Ob das Kachelgitter ueber der Karte angezeigt wird ([ui] show_grid).
+
+    Whether the tile grid over the map is shown ([ui] show_grid). Default: off.
+    """
+    return _load().getboolean("ui", "show_grid", fallback=False)
+
+
+def set_show_grid(on: bool) -> None:
+    """Speichert die Gitter-Sichtbarkeit zurueck in die config.ini.
+
+    Saves the grid visibility back into config.ini.
+    """
+    cp = _load()
+    if not cp.has_section("ui"):
+        cp.add_section("ui")
+    cp.set("ui", "show_grid", "true" if on else "false")
+    _save(cp)
+
+
 def set_output(out_dir: str, name: str) -> None:
     """Speichert Ausgabeordner + DLL-Name zurueck in die config.ini.
 
@@ -160,7 +182,7 @@ def ensure_default_file() -> None:
     cp["paths"] = {"game_path": DEFAULT_GAME_PATH, "msvs_path": DEFAULT_MSVS_PATH}
     cp["build"] = {"platform_toolset": "", "windows_sdk": ""}
     cp["output"] = {"output_dir": "", "dll_name": DEFAULT_DLL_NAME}
-    cp["ui"] = {"language": DEFAULT_LANGUAGE}
+    cp["ui"] = {"language": DEFAULT_LANGUAGE, "show_grid": "false"}
     try:
         _save(cp)
     except OSError:

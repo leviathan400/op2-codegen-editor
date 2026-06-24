@@ -92,6 +92,26 @@ class EditorWindow(QMainWindow):
         m.addSeparator()
         a = QAction(tr("window.quit"), self); a.triggered.connect(self.close); m.addAction(a)
 
+        view_menu = self.menuBar().addMenu(tr("window.menu_view"))
+        # Kachelgitter-Umschalter; Anfangszustand aus config.ini.
+        # Tile-grid toggle; initial state from config.ini.
+        grid_on = appconfig.show_grid()
+        self.view.set_grid(grid_on)
+        self.grid_action = QAction(tr("window.show_grid"), self)
+        self.grid_action.setCheckable(True)
+        self.grid_action.setChecked(grid_on)
+        self.grid_action.toggled.connect(self._toggle_grid)
+        view_menu.addAction(self.grid_action)
+        view_menu.addSeparator()
+        # Zoom-Voreinstellungen; das Mausrad zoomt weiterhin frei.
+        # Zoom presets; the mouse wheel still free-zooms.
+        zoom_def = QAction(tr("window.zoom_default"), self)
+        zoom_def.triggered.connect(self.view.zoom_default)
+        view_menu.addAction(zoom_def)
+        zoom_fit = QAction(tr("window.zoom_fit"), self)
+        zoom_fit.triggered.connect(self.view.zoom_fit)
+        view_menu.addAction(zoom_fit)
+
         lang_menu = self.menuBar().addMenu(tr("window.menu_language"))
         configured = appconfig.language().strip().lower()
         auto_act = QAction(tr("window.lang_auto"), self)
@@ -128,6 +148,12 @@ class EditorWindow(QMainWindow):
     def _set_language(self, code):
         appconfig.set_language(code)
         QMessageBox.information(self, tr("window.lang_changed_title"), tr("window.lang_changed_text"))
+
+    def _toggle_grid(self, on):
+        # Gitter ein-/ausblenden und Einstellung in config.ini sichern.
+        # Show/hide the grid and persist the setting in config.ini.
+        self.view.set_grid(on)
+        appconfig.set_show_grid(on)
 
     def _build_sidebar(self):
         dock = QDockWidget(tr("window.dock_place"), self)

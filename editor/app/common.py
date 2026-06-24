@@ -23,7 +23,7 @@ for _p in (ROOT / "codegen", ROOT / "mapview", EDITOR_DIR):
 # Window/app icon (lives in the package under resources/).
 ICON_PATH = HERE / "resources" / "Structure.ico"
 
-from PySide6.QtCore import Qt, QRectF, QThread, QTimer, Signal
+from PySide6.QtCore import Qt, QLineF, QRectF, QThread, QTimer, Signal
 from PySide6.QtGui import QAction, QBrush, QColor, QIcon, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDockWidget,
