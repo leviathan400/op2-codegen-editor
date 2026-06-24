@@ -40,6 +40,7 @@ class EditorWindow(QMainWindow):
         self.building_groups: list[BuildingGroupSpec] = []
         self.reinforce_groups: list[ReinforceGroupSpec] = []
         self.node_positions: dict = {}  # Timeline-Knotenpositionen (key -> [x, y])
+        # Timeline node positions (key -> [x, y])
         self._next_object_id = 1
         self._pending_trigger_index = 0
         self._pending_action_index = -1
@@ -104,6 +105,7 @@ class EditorWindow(QMainWindow):
             lang_menu.addAction(act)
 
         # "Mission"-Aktionen als obere Werkzeugleiste statt Menue.
+        # "Mission" actions as a top toolbar instead of a menu.
         tb = QToolBar("Mission", self)
         tb.setToolButtonStyle(Qt.ToolButtonTextOnly)
         self.addToolBar(tb)
@@ -141,6 +143,7 @@ class EditorWindow(QMainWindow):
         lay.addWidget(self.list, 1)
 
         # Spieler
+        # Player
         self.player_row = QWidget(); pr = QFormLayout(self.player_row); pr.setContentsMargins(0, 0, 0, 0)
         self.player_spin = QSpinBox(); self.player_spin.setRange(0, 5)
         pr.addRow(tr("window.lbl_player"), self.player_spin)
@@ -153,14 +156,17 @@ class EditorWindow(QMainWindow):
         lay.addWidget(self.unit_name_row)
 
         # Cargo-Truck-Parameter
+        # Cargo truck parameters
         self.cargo_row = QWidget(); cr = QFormLayout(self.cargo_row); cr.setContentsMargins(0, 0, 0, 0)
         self.cargo_combo = QComboBox(); fill_combo(self.cargo_combo, TRUCK_CARGO, "truck_cargo")
         self.cargo_combo.setCurrentIndex(self.cargo_combo.findData("Leer"))  # Trucks standardmaessig leer
+        # Trucks empty by default
         self.cargo_amount = QSpinBox(); self.cargo_amount.setRange(0, 5000); self.cargo_amount.setValue(1000)
         cr.addRow(tr("window.lbl_cargo"), self.cargo_combo); cr.addRow(tr("window.lbl_amount"), self.cargo_amount)
         lay.addWidget(self.cargo_row)
 
         # ConVec-Bausatz
+        # ConVec kit
         self.kit_row = QWidget(); kr = QFormLayout(self.kit_row); kr.setContentsMargins(0, 0, 0, 0)
         self.kit_combo = QComboBox()
         self.kit_combo.addItem(tr("window.empty"), None)
@@ -170,6 +176,7 @@ class EditorWindow(QMainWindow):
         lay.addWidget(self.kit_row)
 
         # Beacon-Parameter
+        # Beacon parameters
         self.beacon_row = QWidget(); br = QFormLayout(self.beacon_row); br.setContentsMargins(0, 0, 0, 0)
         self.ore_combo = QComboBox(); fill_combo(self.ore_combo, ORE_TYPES, "ore_types")
         self.yield_combo = QComboBox(); fill_combo(self.yield_combo, YIELDS, "yields")
@@ -177,6 +184,7 @@ class EditorWindow(QMainWindow):
         lay.addWidget(self.beacon_row)
 
         # Waffe (Kampffahrzeuge Lynx/Panther/Tiger + Guard Post)
+        # Weapon (combat vehicles Lynx/Panther/Tiger + Guard Post)
         self.weapon_row = QWidget(); wr = QFormLayout(self.weapon_row); wr.setContentsMargins(0, 0, 0, 0)
         self.weapon_combo = QComboBox()
         for d, m in WEAPONS:
@@ -191,6 +199,7 @@ class EditorWindow(QMainWindow):
         self._fill_list(self.cat_combo.currentData())
 
     # --- Mission-Uebersicht: Ausfuehrungs-Flussbaum + Gesamtuebersicht (Dock rechts) ---
+    # --- Mission overview: execution flow tree + overall summary (dock on the right) ---
     def _build_overview(self):
         dock = QDockWidget(tr("window.dock_overview"), self)
         dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
@@ -375,6 +384,7 @@ class EditorWindow(QMainWindow):
         self.weapon_row.setVisible(mid in WEAPON_UNITS)
 
     # --- Karte ---
+    # --- Map ---
     def choose_map(self):
         dlg = MapDialog(self, self.res.names(), self.map_name, self.mission_name)
         if dlg.exec() == QDialog.Accepted:
@@ -526,6 +536,12 @@ class EditorWindow(QMainWindow):
         self._rect_pick_item.setZValue(1000)
         self.scene.addItem(self._rect_pick_item)
 
+    # Die drei _rect_drag_*-Methoden multiplexen drei Zieh-Modi:
+    #   (a) startMiningOperation Smelter-"rect" (Rechteck), (b) recordTube/recordWall
+    #   Linien-Zug, (c) das SetRect-Rechteck einer Gruppe.
+    # The three _rect_drag_* methods multiplex three drag modes:
+    #   (a) startMiningOperation smelter "rect" (rectangle), (b) recordTube/recordWall
+    #   line drag, (c) a group's SetRect rectangle.
     def _rect_drag_start(self, tx, ty):
         if self._action_pick and self._action_pick["kind"] == "startMiningOperation" and self._action_pick.get("mode") == "rect":
             tx, ty = self._clamp_tile(tx, ty)
@@ -624,6 +640,20 @@ class EditorWindow(QMainWindow):
             self.scene.removeItem(item)
         self._action_preview_items = []
 
+    # Startet einen Karten-Auswahlmodus aus einem Trigger-Aktions-Dialog.
+    # Das verbrauchte request-dict-Schema:
+    #   kind: "recordBuilding" | "recordTube" | "recordWall" | "assignToGroup"
+    #         | "startMiningOperation"
+    #   mode (optional): "mine" | "smelter" | "rect" (nur startMiningOperation)
+    #   group_name, building_type, wall_type, mining_group_name: je nach kind
+    #   trigger_index, action_index, player, ore_type, truck_count, Koordinaten usw.
+    # Begins a map-pick mode from a trigger-action dialog.
+    # The consumed request dict schema:
+    #   kind: "recordBuilding" | "recordTube" | "recordWall" | "assignToGroup"
+    #         | "startMiningOperation"
+    #   mode (optional): "mine" | "smelter" | "rect" (startMiningOperation only)
+    #   group_name, building_type, wall_type, mining_group_name: depending on kind
+    #   trigger_index, action_index, player, ore_type, truck_count, coords, etc.
     def _begin_action_pick(self, request):
         self._placement_active = False
         self._clear_placement_preview()
@@ -707,6 +737,10 @@ class EditorWindow(QMainWindow):
         self.scene.addItem(rect)
         self._action_preview_items = [rect]
 
+    # Liefert die Kacheln einer L-foermigen (achsenparallelen) Linie von (x1,y1)
+    # nach (x2,y2); es wird zuerst entlang der laengeren Achse geschritten.
+    # Returns the tiles of an L-shaped (axis-aligned) line from (x1,y1) to (x2,y2),
+    # stepping along the longer axis first.
     def _line_tiles(self, x1, y1, x2, y2):
         tiles = []
         if abs(x2 - x1) >= abs(y2 - y1):
@@ -870,6 +904,7 @@ class EditorWindow(QMainWindow):
             return
         self.mission_name = data.get("mission_name", "Editor Mission")
         # Knotenpositionen in-place aktualisieren (Timeline haelt eine Referenz darauf)
+        # Update node positions in place (the timeline holds a reference to it)
         self.node_positions.clear()
         self.node_positions.update(data.get("node_positions", {}))
         if "players" in data and data["players"]:
@@ -894,6 +929,7 @@ class EditorWindow(QMainWindow):
                     continue
         self.setWindowTitle(f"OP2 Mission Editor — {self.mission_name}")
         self.load_map(data.get("map", self.map_name))  # leert Szene + Objekte
+        # clears scene + objects
         used_uids = {d.get("uid") for d in data.get("objects", []) if d.get("uid")}
         for od in data.get("objects", []):
             try:
@@ -971,6 +1007,7 @@ class EditorWindow(QMainWindow):
         self._refresh_overview()
 
     # --- Platzieren / Entfernen ---
+    # --- Place / Remove ---
     def _object_at(self, tx, ty):
         for obj in reversed(self.objects):
             if obj.covers(tx, ty):
@@ -996,6 +1033,13 @@ class EditorWindow(QMainWindow):
             label = obj.unit_name or obj.display
             self.statusBar().showMessage(tr("window.status_updated", label=label))
 
+    # Verteilt einen Karten-Klick in Prioritaetsreihenfolge: zuerst eine aktive
+    # Aktions-Auswahl (startMiningOperation / recordBuilding / assignToGroup),
+    # sonst das Platzieren des gewaehlten Katalog-Elements, sonst Klick-zum-Bearbeiten
+    # eines vorhandenen Objekts.
+    # Dispatches a map click in priority order: first an active action-pick
+    # (startMiningOperation / recordBuilding / assignToGroup), else placement of the
+    # selected catalog item, else click-to-edit an existing object.
     def on_place(self, tx, ty):
         if self._action_pick and self._action_pick["kind"] == "startMiningOperation":
             if self.map is None or not (0 <= tx < self.map.width and 0 <= ty < self.map.height):
@@ -1118,8 +1162,10 @@ class EditorWindow(QMainWindow):
         self.statusBar().showMessage(tr("window.status_objects_cleared"))
 
     # --- Build ---
+    # --- Build ---
     def build_mission(self) -> Mission:
         # Offset +31/-1 wird im Codegen ergaenzt (MkXY fuer Einheiten, XYPos fuer Beacons/Walls).
+        # Offset +31/-1 is added in the codegen (MkXY for units, XYPos for beacons/walls).
         units, beacons, walls = [], [], []
         for o in self.objects:
             if o.kind in ("structure", "vehicle"):
