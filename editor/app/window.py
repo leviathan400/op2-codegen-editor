@@ -3,6 +3,7 @@ from .common import *
 from .placed_object import PlacedObject
 from .mapview import MapView
 from .build_worker import BuildWorker
+from .cpp_highlight import CppHighlighter
 from .dialogs.map_dialog import MapDialog
 from .dialogs.object_edit import ObjectEditDialog
 from .dialogs.output_dialog import OutputDialog
@@ -1251,6 +1252,10 @@ class EditorWindow(QMainWindow):
         text.setPlainText(code)
         text.setFont(QFont("Consolas", 10))
         text.setLineWrapMode(QPlainTextEdit.NoWrap)
+        # Dunkler Hintergrund + C++-Syntax-Highlighting.
+        # Dark background + C++ syntax highlighting.
+        text.setStyleSheet("QPlainTextEdit { background-color: #1e1e1e; color: #d4d4d4; }")
+        dlg._highlighter = CppHighlighter(text.document())
         btns = QDialogButtonBox(QDialogButtonBox.Close)
         btns.rejected.connect(dlg.reject)
         btns.accepted.connect(dlg.accept)
